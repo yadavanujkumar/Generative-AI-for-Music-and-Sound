@@ -40,6 +40,28 @@ class AudioConfig:
     NUM_TIMESTEPS: int = 1000  # Number of diffusion timesteps
     BETA_START: float = 0.0001  # Starting beta for noise schedule
     BETA_END: float = 0.02  # Ending beta for noise schedule
+    
+    # Audio processing constants
+    DB_RANGE: float = 80.0  # dB range for Mel spectrogram normalization
+    MAX_SEED: int = 2**31  # Maximum seed value for random generators
+    
+    # Simulated harmonic frequencies for demo
+    DEMO_FREQUENCIES: tuple = (0.1, 0.2, 0.3, 0.5)
+
+
+def normalize_spectrogram(spectrogram: np.ndarray) -> np.ndarray:
+    """
+    Normalize spectrogram values to [0, 1] range.
+    
+    Args:
+        spectrogram: Input spectrogram array
+        
+    Returns:
+        Normalized spectrogram with values in [0, 1]
+    """
+    min_val = spectrogram.min()
+    max_val = spectrogram.max()
+    return (spectrogram - min_val) / (max_val - min_val + 1e-8)
 
 
 # =============================================================================
@@ -98,9 +120,7 @@ def audio_to_mel_spectrogram(
     mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
     
     # Normalize to [0, 1] range for neural network processing
-    mel_spec_normalized = (mel_spec_db - mel_spec_db.min()) / (mel_spec_db.max() - mel_spec_db.min() + 1e-8)
-    
-    return mel_spec_normalized
+    return normalize_spectrogram(mel_spec_db)
 
 
 def preprocess_audio_file(file_path: str) -> torch.Tensor:
@@ -151,12 +171,12 @@ def create_simulated_mel_spectrogram(
     
     # Create harmonic patterns to simulate music
     mel_spec = np.zeros((n_mels, n_frames))
-    for i, freq in enumerate([0.1, 0.2, 0.3, 0.5]):
+    for freq in AudioConfig.DEMO_FREQUENCIES:
         harmonic = np.sin(2 * np.pi * freq * t)
         mel_spec += np.outer(np.exp(-(f - freq)**2 / 0.01), harmonic)
     
     # Normalize
-    mel_spec = (mel_spec - mel_spec.min()) / (mel_spec.max() - mel_spec.min() + 1e-8)
+    mel_spec = normalize_spectrogram(mel_spec)
     
     mel_tensor = torch.from_numpy(mel_spec).float()
     return mel_tensor.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, n_mels, n_frames)
@@ -606,7 +626,8 @@ def mel_spectrogram_to_audio(
         Audio waveform as numpy array
     """
     # Denormalize from [0, 1] to dB scale (approximate range)
-    mel_spec_db = mel_spec * 80.0 - 80.0  # Approximate dB range
+    db_range = AudioConfig.DB_RANGE
+    mel_spec_db = mel_spec * db_range - db_range  # Approximate dB range
     
     # Convert from dB to power
     mel_spec_power = librosa.db_to_power(mel_spec_db)
@@ -767,7 +788,7 @@ class TextEncoder:
         """
         # Use text hash to create deterministic but varied embeddings
         text_hash = hash(text)
-        np.random.seed(abs(text_hash) % (2**31))
+        np.random.seed(abs(text_hash) % AudioConfig.MAX_SEED)
         
         # Create embeddings with shape (1, sequence_length, embed_dim)
         embeddings = np.random.randn(1, 77, 512).astype(np.float32)
