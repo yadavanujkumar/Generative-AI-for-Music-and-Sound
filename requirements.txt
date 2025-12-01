@@ -1,0 +1,15 @@
+# Text-to-Audio Generation Pipeline Dependencies
+# Core Deep Learning
+torch>=2.0.0
+transformers>=4.30.0
+diffusers>=0.20.0
+
+# Audio Processing
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# Numerical Computing
+numpy>=1.24.0
+
+# Optional: For visualization (if needed)
+matplotlib>=3.7.0
